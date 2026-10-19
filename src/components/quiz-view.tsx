@@ -15,8 +15,12 @@ import {
   Medal,
 } from 'lucide-react'
 import { QUESTIONS, type QuizQuestion, type TopicId } from '@/lib/anatomy-data'
+import { EXTRA_QUESTIONS } from '@/lib/neuro-extra-data'
+import { recordQuiz } from '@/lib/gamification'
+import { confettiBurst, confettiParty } from '@/lib/confetti'
 
 const QUESTIONS_PER_EXAM = 10
+const ALL_QUESTIONS: QuizQuestion[] = [...QUESTIONS, ...(EXTRA_QUESTIONS as unknown as QuizQuestion[])]
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -31,7 +35,7 @@ type Phase = 'inicio' | 'pregunta' | 'resultado'
 
 export function QuizView() {
   const [phase, setPhase] = useState<Phase>('inicio')
-  const [filter, setFilter] = useState<TopicId | 'todos'>('todos')
+  const [filter, setFilter] = useState<TopicId | 'todos' | 'extras'>('todos')
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<number[]>([]) // respuesta elegida por pregunta
@@ -43,8 +47,13 @@ export function QuizView() {
     [answers, questions]
   )
 
-  const startExam = (topicFilter: TopicId | 'todos') => {
-    const pool = topicFilter === 'todos' ? QUESTIONS : QUESTIONS.filter((q) => q.topic === topicFilter)
+  const startExam = (topicFilter: TopicId | 'todos' | 'extras') => {
+    const pool =
+      topicFilter === 'todos'
+        ? ALL_QUESTIONS
+        : topicFilter === 'extras'
+          ? (EXTRA_QUESTIONS as unknown as QuizQuestion[])
+          : QUESTIONS.filter((q) => q.topic === topicFilter)
     setFilter(topicFilter)
     setQuestions(shuffle(pool).slice(0, QUESTIONS_PER_EXAM))
     setAnswers([])
@@ -75,6 +84,10 @@ export function QuizView() {
         const prevBest = Number(localStorage.getItem('neuroatlas-best') ?? '0')
         localStorage.setItem('neuroatlas-best', String(Math.max(prevBest, pct)))
       } catch {}
+      // ── Gamificación: XP, logros y confetti ──
+      recordQuiz(finalScore, questions.length)
+      if (finalScore === questions.length && questions.length >= 10) confettiParty()
+      else if (pct >= 70) confettiBurst()
       setPhase('resultado')
     } else {
       setCurrent((c) => c + 1)
@@ -112,6 +125,9 @@ export function QuizView() {
               <div className="flex flex-wrap justify-center gap-2">
                 <Button onClick={() => startExam('todos')} className="bg-fuchsia-600 text-white hover:bg-fuchsia-500">
                   <Play className="h-4 w-4" /> Examen completo
+                </Button>
+                <Button variant="outline" onClick={() => startExam('extras')}>
+                  Temas del práctico ✨
                 </Button>
                 <Button variant="outline" onClick={() => startExam('limbico')}>
                   Solo sistema límbico
@@ -236,7 +252,11 @@ export function QuizView() {
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {Math.round((score / questions.length) * 100)}% de acierto ·{' '}
-                  {filter === 'todos' ? 'examen completo' : 'tema: ' + filter}
+                  {filter === 'todos'
+                    ? 'examen completo'
+                    : filter === 'extras'
+                      ? 'temas del práctico (unidades 1-2)'
+                      : 'tema: ' + filter}
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
